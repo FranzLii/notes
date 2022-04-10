@@ -837,7 +837,7 @@ spring:
 
 ##### 3.使用RabbitTemplate完成实例
 
-**Publisher**
+###### 1.Helloworld
 
 ```java
 @RunWith(SpringRunner.class)
@@ -868,7 +868,392 @@ public class rabbitListener {
 }
 ```
 
+###### 2.Wrokshop  
+
+![image-20220409195043853](https://gitee.com/ingachin/mdimage/raw/master/image-20220409195043853.png)
+
+配置perfetch使其达到负载均衡
+
+```xml
+spring:
+...
+    listener:
+      simple:
+        prefetch: 1
+```
 
 
 
+###### 3.发布订阅模型
 
+一条消息发给多个消费者
+
+![image-20220409195329752](https://gitee.com/ingachin/mdimage/raw/master/image-20220409195329752.png)
+
+
+
+**Fanout**
+
+Fanout Exchange 会将收到的消息路由到每一个跟其绑定的queue
+
+```java
+@Configuration
+public class FanoutConfig {
+    @Bean
+    public FanoutExchange fanoutExchange(){
+        return new FanoutExchange("fanout.exchange");
+    }
+    @Bean
+    public Queue queue1(){
+        return new Queue("simple.queue1");
+    }
+    @Bean
+    public Binding fanoutBinding(Queue queue1,FanoutExchange fanoutExchange){
+        return BindingBuilder.bind(queue1).to(fanoutExchange);
+    }
+    @Bean
+    public Queue queue2(){
+        return new Queue("simple.queue2");
+    }
+    @Bean
+    public Binding fanoutBinding2(Queue queue2,FanoutExchange fanoutExchange){
+        return BindingBuilder.bind(queue2).to(fanoutExchange);
+    }
+
+}
+```
+
+```java
+@Test
+public void testsentoexchange(){
+    String exchangeName = "fanout.exchange";
+    String message = "hello,every one";
+    rabbitTemplate.convertAndSend(exchangeName,"",message);
+}
+```
+
+
+
+**DirectExchange**
+
+> Direct Exchange 会将接收到的消息根据路由规则路由到指定的Queue
+
+![image-20220409202055807](https://gitee.com/ingachin/mdimage/raw/master/image-20220409202055807.png)
+
+当不指定路由规则时 = FanoutExchange
+
+基于`@RabbitListener`声明Exchange,Queue,RoutingKey
+
+消费者代码
+
+```java
+@RabbitListener(bindings = @QueueBinding(
+            value = @Queue(name = "direct.queue2"),
+            exchange = @Exchange(name = "direct.exchange",type = ExchangeTypes.DIRECT),
+            key = {"yello"}
+    ))
+    public void directQueue2(String msg){
+        System.out.println("[yello]"+"========>"+msg);
+    }
+```
+
+Publisher代码
+
+```java
+@Test
+public void testDirectExchange(){
+    String exchangeName = "direct.exchange";
+    String message = "hello,every one";
+    rabbitTemplate.convertAndSend(exchangeName,"red",message);
+}
+```
+
+
+
+**TopicExchange**
+
+> TopicExchange 和 DirectExchange 类似，区别在于routingKey必须是多个单词的列表，并且以.为分隔
+
+![image-20220409203932179](https://gitee.com/ingachin/mdimage/raw/master/image-20220409203932179.png)
+
+  
+
+###### 4.Spring-AMQP消息转换器
+
+Spring 的消息对象处理默认是由MessageConverter处理的，默认实现为SimpleMessageConverter，基于JDK的ObjectOutputStream完成序列化
+
+推荐修改为JSON方式完成序列化
+
+![image-20220409205638506](https://gitee.com/ingachin/mdimage/raw/master/image-20220409205638506.png)
+
+  
+
+## 8.elasticsearch
+
+  ### 1.基本原理
+
+![image-20220409210311770](https://gitee.com/ingachin/mdimage/raw/master/image-20220409210311770.png)
+
+![image-20220409210343901](https://gitee.com/ingachin/mdimage/raw/master/image-20220409210343901.png)
+
+ 正排索引和倒排索引的区别
+
+正向索引：按文档逐个查询，类似于关系数据表里逐条数据查询，并以like模糊匹配
+优点：易于维护：新增的话直接跟在原来的后面，删除的话直接删除某一条即可
+缺点：查询时间长，检索效率低下
+
+![image-20220409211521019](https://gitee.com/ingachin/mdimage/raw/master/image-20220409211521019.png)
+
+倒排索引：倒排表以字或词为关键字进行索引，表中关键字所对应的记录表项记录了出现这个字或词的所有文档，一个表项就是一个字表段，它记录该文档的ID和字符在该文档中出现的位置情况。
+ 优点：检索的快速响应是一个最为关键的性能
+ 缺点：倒排表的建立和维护都较为复杂（索引建立由于在后台进行，尽管效率相对低一些，但不会影响整个搜索引擎的效率）  
+
+![image-20220409211503409](https://gitee.com/ingachin/mdimage/raw/master/image-20220409211503409.png)
+
+### 2.Mysql和es概念区别
+
+![image-20220409211945496](https://gitee.com/ingachin/mdimage/raw/master/image-20220409211945496.png)
+
+![image-20220409212008448](https://gitee.com/ingachin/mdimage/raw/master/image-20220409212008448.png)
+
+![image-20220409212039518](https://gitee.com/ingachin/mdimage/raw/master/image-20220409212039518.png)
+
+![image-20220409212438687](https://gitee.com/ingachin/mdimage/raw/master/image-20220409212438687.png)
+
+### 3.es部署
+
+#### 1.创建网络    
+
+因为我们还需要部署kibana容器，因此需要让es和kibana容器互联。这里先创建一个网络：
+
+```bash
+docker network create es-net
+```
+
+ 
+
+#### 2.下载镜像
+
+```bash
+docker pull elasticsearch
+```
+
+  
+
+#### 3.部署容器  
+
+运行docker命令，部署单点es：
+
+```sh
+docker run -d \
+	--name es \
+    -e "ES_JAVA_OPTS=-Xms512m -Xmx512m" \
+    -e "discovery.type=single-node" \
+    -v es-data:/usr/share/elasticsearch/data \
+    -v es-plugins:/usr/share/elasticsearch/plugins \
+    --privileged \
+    --network es-net \
+    -p 9200:9200 \
+    -p 9300:9300 \
+elasticsearch:7.12.1
+```
+
+命令解释：
+
+- `-e "cluster.name=es-docker-cluster"`：设置集群名称
+- `-e "http.host=0.0.0.0"`：监听的地址，可以外网访问
+- `-e "ES_JAVA_OPTS=-Xms512m -Xmx512m"`：内存大小
+- `-e "discovery.type=single-node"`：非集群模式
+- `-v es-data:/usr/share/elasticsearch/data`：挂载逻辑卷，绑定es的数据目录
+- `-v es-logs:/usr/share/elasticsearch/logs`：挂载逻辑卷，绑定es的日志目录
+- `-v es-plugins:/usr/share/elasticsearch/plugins`：挂载逻辑卷，绑定es的插件目录
+- `--privileged`：授予逻辑卷访问权
+- `--network es-net` ：加入一个名为es-net的网络中
+- `-p 9200:9200`：端口映射配置
+
+### 4.部署kibana
+
+kibana可以给我们提供一个elasticsearch的可视化界面，便于我们学习。
+
+#### 2.1.部署
+
+运行docker命令，部署kibana
+
+```sh
+docker run -d \
+--name kibana \
+-e ELASTICSEARCH_HOSTS=http://es:9200 \
+--network=es-net \
+-p 5601:5601  \
+kibana:7.12.1
+```
+
+- `--network es-net` ：加入一个名为es-net的网络中，与elasticsearch在同一个网络中
+- `-e ELASTICSEARCH_HOSTS=http://es:9200"`：设置elasticsearch的地址，因为kibana已经与elasticsearch在一个网络，因此可以用容器名直接访问elasticsearch
+- `-p 5601:5601`：端口映射配置
+
+kibana启动一般比较慢，需要多等待一会，可以通过命令：
+
+```sh
+docker logs -f kibana
+```
+
+查看运行日志，当查看到下面的日志，说明成功：
+
+### 5.IK分词器  
+
+####  在线安装ik插件
+
+```shell
+# 进入容器内部
+docker exec -it elasticsearch /bin/bash
+
+# 在线下载并安装
+./bin/elasticsearch-plugin  install https://ghproxy.com/https://github.com/medcl/elasticsearch-analysis-ik/releases/download/v7.12.1/elasticsearch-analysis-ik-7.12.1.zip
+
+#退出
+exit
+#重启容器
+docker restart elasticsearch
+```
+
+IK分词器包含两种模式：
+
+* `ik_smart`：最少切分
+* `ik_max_word`：最细切分    
+
+####  扩展词词典
+
+随着互联网的发展，“造词运动”也越发的频繁。出现了很多新的词语，在原有的词汇列表中并不存在。比如：“奥力给”，“传智播客” 等。
+
+所以我们的词汇也需要不断的更新，IK分词器提供了扩展词汇的功能。
+
+1）打开IK分词器config目录：
+
+2）在IKAnalyzer.cfg.xml配置文件内容添加：
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE properties SYSTEM "http://java.sun.com/dtd/properties.dtd">
+<properties>
+        <comment>IK Analyzer 扩展配置</comment>
+        <!--用户可以在这里配置自己的扩展字典 *** 添加扩展词典-->
+        <entry key="ext_dict">ext.dic</entry>
+</properties>
+```
+
+3）新建一个 ext.dic，可以参考config目录下复制一个配置文件进行修改
+
+```properties
+传智播客
+奥力给
+```
+
+4）重启elasticsearch 
+
+```sh
+docker restart es
+
+# 查看 日志
+docker logs -f elasticsearch
+```
+
+日志中已经成功加载ext.dic配置文件
+
+5）测试效果：
+
+```json
+GET /_analyze
+{
+  "analyzer": "ik_max_word",
+  "text": "传智播客Java就业超过90%,奥力给！"
+}
+```
+
+> 注意当前文件的编码必须是 UTF-8 格式，严禁使用Windows记事本编辑
+
+####  停用词词典
+
+在互联网项目中，在网络间传输的速度很快，所以很多语言是不允许在网络上传递的，如：关于宗教、政治等敏感词语，那么我们在搜索时也应该忽略当前词汇。
+
+IK分词器也提供了强大的停用词功能，让我们在索引时就直接忽略当前的停用词汇表中的内容。
+
+1）IKAnalyzer.cfg.xml配置文件内容添加：
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE properties SYSTEM "http://java.sun.com/dtd/properties.dtd">
+<properties>
+        <comment>IK Analyzer 扩展配置</comment>
+        <!--用户可以在这里配置自己的扩展字典-->
+        <entry key="ext_dict">ext.dic</entry>
+         <!--用户可以在这里配置自己的扩展停止词字典  *** 添加停用词词典-->
+        <entry key="ext_stopwords">stopword.dic</entry>
+</properties>
+```
+
+3）在 stopword.dic 添加停用词
+
+```properties
+习大大
+```
+
+4）重启elasticsearch 
+
+```sh
+# 重启服务
+docker restart elasticsearch
+docker restart kibana
+
+# 查看 日志
+docker logs -f elasticsearch
+```
+
+日志中已经成功加载stopword.dic配置文件
+
+5）测试效果：
+
+```json
+GET /_analyze
+{
+  "analyzer": "ik_max_word",
+  "text": "传智播客Java就业率超过95%,习大大都点赞,奥力给！"
+}
+```
+
+> 注意当前文件的编码必须是 UTF-8 格式，严禁使用Windows记事本编辑
+
+### 6.mapping属性  
+
+![image-20220410093934984](https://gitee.com/ingachin/mdimage/raw/master/image-20220410093934984.png)
+
+```DCL
+PUT /maisann
+{
+  "mappings": {
+    "properties": {
+      "info":{
+        "type": "text"
+        , "analyzer": "ik_smart"
+      },
+      "email":{
+        "type": "keyword",
+        "index": false
+      },
+      "name":{
+        "type": "object",
+        "properties": {
+          "firstName":{
+            "type": "keyword"
+          },
+          "lastName":{
+            "type": "keyword"
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+![image-20220410095019640](https://gitee.com/ingachin/mdimage/raw/master/image-20220410095019640.png)
