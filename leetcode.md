@@ -171,3 +171,37 @@ public:
 };
 ```
 
+## [357. 统计各位数字都不同的数字个数](https://leetcode-cn.com/problems/count-numbers-with-unique-digits/)
+
+![image-20220411193812923](https://gitee.com/ingachin/mdimage/raw/master/image-20220411193812923.png)
+
+
+
+> 数学解法
+>
+> f[0] = 1;
+>
+> f[1] = 10;
+>
+> f[2] = c91 * c91 + f[1];    第一个9为1 - 9当中选一个，第二个9为0-9排除掉第一个数选一个
+>
+>  f[3] = c91  * c91 *  c81 + f[2];
+>
+> ...
+
+```c++
+class Solution {
+public:
+    int countNumbersWithUniqueDigits(int n) {
+        if(n == 0) return 1;
+        if(n == 1) return 10;
+        int ans = 10;int cur = 9;
+        for(int i = 0 ;i < n - 1;i++){
+            cur *= 9 - i;
+            ans += cur;
+        }
+        return ans;
+    }
+};
+```
+

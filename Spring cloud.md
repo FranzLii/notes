@@ -1,4 +1,4 @@
-# Spring cloud
+#  Spring cloud
 
 ## 1.eureka 
 
@@ -854,6 +854,24 @@ public class PublisherTest {
         rabbitTemplate.convertAndSend(queueName,message);
     }
 }
+
+@RestController
+@Slf4j
+@RequestMapping("SimpleSender")
+public class SimpleSender {
+
+    @Autowired
+    private AmqpTemplate amqpTemplate;
+
+    @GetMapping("simple")
+    public void simpleSend(String content){
+        log.info("简单队列发送消息：{}",content);
+        this.amqpTemplate.convertAndSend("simple",content);
+
+    }
+
+}
+
 ```
 
 **Cosumer**
@@ -865,6 +883,23 @@ public class rabbitListener {
     public void listen(String s){
         System.out.println(s);
     }
+}
+
+@RestController
+@Slf4j
+@RequestMapping("SimpleSender")
+public class SimpleSender {
+
+    @Autowired
+    private AmqpTemplate amqpTemplate;
+
+    @GetMapping("simple")
+    public void simpleSend(String content){
+        log.info("简单队列发送消息：{}",content);
+        this.amqpTemplate.convertAndSend("simple",content);
+
+    }
+
 }
 ```
 
@@ -880,6 +915,49 @@ spring:
     listener:
       simple:
         prefetch: 1
+```
+
+```java
+@RestController
+@Slf4j
+@RequestMapping("WorkSender")
+public class WorkSender {
+
+    @Autowired
+    private AmqpTemplate amqpTemplate;
+
+    @GetMapping("workSender")
+    public void workSender(String content){
+        log.info("work模式发送消息：{}",content);
+       this.amqpTemplate.convertAndSend("work",content);
+    }
+}
+```
+
+```java
+@Slf4j
+@Component
+//放在类上，监听到消息后会交给@RabbitHandler的方法进行处理，如果有多个方法,会根据参数类型进行选择
+//@RabbitListener(queuesToDeclare = @Queue("work") )
+public class WorkReceiver {
+
+    @RabbitListener(queuesToDeclare = @Queue("work"))
+    @RabbitHandler
+    public void workReceiver1(String content) throws InterruptedException {
+        log.info("work模式开始消费1：{}",content);
+        Thread.sleep(1000);
+
+    }
+
+    @RabbitListener(queuesToDeclare = @Queue("work") )
+    @RabbitHandler
+    public void workReceiver2(String content, Channel channel) throws IOException, InterruptedException {
+        log.info("work模式开始消费2：{}",content);
+        Thread.sleep(2000);
+
+    }
+}
+
 ```
 
 
@@ -921,6 +999,22 @@ public class FanoutConfig {
     }
 
 }
+
+
+@RestController
+@Slf4j
+@RequestMapping("FanoutSender")
+public class FanoutSender {
+    @Autowired
+    private AmqpTemplate amqpTemplate;
+
+    @GetMapping("fanoutSender")
+    public  void  fanout(String content){
+        log.info("fanout开始广播数据：{}",content);
+        this.amqpTemplate.convertAndSend("fanout.test","",content);
+    }
+}
+
 ```
 
 ```java
@@ -930,9 +1024,32 @@ public void testsentoexchange(){
     String message = "hello,every one";
     rabbitTemplate.convertAndSend(exchangeName,"",message);
 }
+
+
+@Slf4j
+@Component
+public class FanoutReceiver {
+
+    @RabbitHandler
+    @RabbitListener(bindings = @QueueBinding(
+            value = @Queue("fanout1"),
+            exchange = @Exchange("fanout.test")
+    ))
+    public void fanoutReceiver2(String content){
+        log.info("广播模式1开始消费：{}",content);
+    }
+
+    @RabbitHandler
+    @RabbitListener(bindings = @QueueBinding(
+            value = @Queue("fanout2"),
+            exchange = @Exchange("fanout.test")
+    ))
+    public void fanoutReceiver1(String content){
+        log.info("广播模式2开始消费：{}",content);
+    }
+
+
 ```
-
-
 
 **DirectExchange**
 
@@ -1257,3 +1374,747 @@ PUT /maisann
 ```
 
 ![image-20220410095019640](https://gitee.com/ingachin/mdimage/raw/master/image-20220410095019640.png)
+
+### 7.文档操作
+
+![image-20220410194336230](https://gitee.com/ingachin/mdimage/raw/master/image-20220410194336230.png)
+
+```DSL
+POST /maisann/_doc/1
+{
+  "info":"sesoki vtuber",
+  "email":"ingachi@163.com",
+  "name":{
+    "firstName":"in",
+    "lastName":"ga"
+  }
+}
+```
+
+查询文档
+
+```DSL
+GET /maisann/_doc/1
+```
+
+删除文档
+
+```DSL
+DELETE /maisann/_doc/1
+```
+
+修改文档  
+
+![image-20220410195231739](https://gitee.com/ingachin/mdimage/raw/master/image-20220410195231739.png)
+
+![image-20220410195450085](https://gitee.com/ingachin/mdimage/raw/master/image-20220410195450085.png)
+
+### 8.RestClient操作索引库  
+
+> ES提供的不同语言的客户端，用来操作ES，本质为DSL语句的组装，通过http请求发送给es
+>
+> [官方文档](https://www.elastic.co/guide/en/elasticsearch/client/java-rest/7.4/java-rest-high.html)
+
+![image-20220410204506953](https://gitee.com/ingachin/mdimage/raw/master/image-20220410204506953.png)  
+
+##### 1.创建索引库
+
+```DSL
+PUT /hotel
+{
+  "mappings": {
+    "properties": {
+      "id":{
+        "type": "keyword"
+      },
+      "name":{
+        "type": "text",
+        "analyzer": "ik_max_word"
+        , "copy_to": "{all}"
+      },
+      "address":{
+        "type": "keyword"
+        , "index": false
+      },
+      "price":{
+        "type": "integer"
+      },
+      "score":{
+        "type": "integer"
+      },
+      "brand":{
+        "type": "keyword"
+        , "copy_to": "{all}"
+      },
+      "city":{
+        "type": "keyword"
+      },
+      "starName":{
+        "type": "keyword"
+      },
+      "bussiness":{
+        "type": "keyword"
+        , "copy_to": "{all}"
+      },
+      "location":{
+        "type": "geo_point"
+      },
+      "pic":{
+        "type": "integer"
+      },
+      "all":{
+        "type": "text",
+        "analyzer": "ik_max_word"
+      }
+    }
+  }
+}  
+
+```
+
+##### 2.导入RestClient依赖
+
+
+
+```xml
+<dependency>
+    <groupId>org.elasticsearch.client</groupId>
+    <artifactId>elasticsearch-rest-high-level-client</artifactId>
+    <version>7.12.1</version>
+</dependency>
+
+<properties>
+    <java.version>1.8</java.version>
+    <elasticsearch.version>7.12.1</elasticsearch.version>
+</properties>
+```
+
+
+
+##### 3.索引库  CRUD
+
+![image-20220410210609946](https://gitee.com/ingachin/mdimage/raw/master/image-20220410210609946.png)
+
+![image-20220410211038537](https://gitee.com/ingachin/mdimage/raw/master/image-20220410211038537.png)
+
+### 9.文档CRUD
+
+##### 1.添加文档
+
+```java
+@SpringBootTest
+public class test1 {
+
+    private RestHighLevelClient client;
+
+    @Autowired
+    private IHotelService iHotelService;
+    @Test
+    void test1() throws IOException {
+
+        Hotel hotel = iHotelService.getById(36934L);
+
+        HotelDoc hotelDoc = new HotelDoc(hotel);
+
+        IndexRequest request = new IndexRequest("hotel").id(String.valueOf(hotel.getId()));
+
+        request.source(JSON.toJSONString(hotelDoc), XContentType.JSON);
+
+        client.index(request, RequestOptions.DEFAULT);
+    }
+
+    @BeforeEach
+    void init(){
+        this.client = new RestHighLevelClient(RestClient.builder(
+                HttpHost.create("http://192.168.117.128:9200")
+        ));
+    }
+    @AfterEach
+    void destory() throws IOException {
+        client.close();
+    }
+
+
+}
+```
+
+![image-20220411201146445](https://gitee.com/ingachin/mdimage/raw/master/image-20220411201146445.png)
+
+##### 2.查询文档
+
+```java
+   @Test
+    void test1() throws IOException {
+
+        GetRequest request = new GetRequest("hotel","36934");
+
+        GetResponse documentFields = client.get(request, RequestOptions.DEFAULT);
+
+        String sourceAsString = documentFields.getSourceAsString();
+
+        HotelDoc hotelDoc = JSON.parseObject(sourceAsString, HotelDoc.class);
+
+        System.out.println(hotelDoc);
+
+    }
+```
+
+##### 3.更新文档
+
+![image-20220411201851362](https://gitee.com/ingachin/mdimage/raw/master/image-20220411201851362.png)
+
+##### 4.删除
+
+```java
+    @Test
+    void test1() throws IOException {
+
+        DeleteRequest request1 = new DeleteRequest("hotel", "36934");
+        DeleteResponse delete = client.delete(request1, RequestOptions.DEFAULT);
+        System.out.println(delete.status());
+
+    }
+
+```
+
+##### 5.批量导入数据
+
+```java
+    @Test
+    void test1() throws IOException {
+        List<Hotel> list = iHotelService.list();
+        List<HotelDoc> list1 = new ArrayList<>();
+        for (Hotel hotel : list) {
+            list1.add(new HotelDoc(hotel));
+        }
+        BulkRequest bulkRequest = new BulkRequest();
+        for (HotelDoc hotelDoc : list1) {
+            bulkRequest.add(new IndexRequest("hotel").id(hotelDoc.getId().toString()).source(JSON.toJSONString(hotelDoc), XContentType.JSON));
+        }
+       client.bulk(bulkRequest, RequestOptions.DEFAULT);
+    }
+
+```
+
+##### 6.DSL Query
+
+![image-20220411204539661](https://gitee.com/ingachin/mdimage/raw/master/image-20220411204539661.png)
+
+###### 1.全文检索
+
+
+```DSL
+查询所有
+GET /hotel/_search
+{
+  "query": {
+    "match_all": {}
+  }
+}
+```
+
+```DSL
+全文检索
+GET /hotel/_search
+{
+  "query": {
+    "match": {
+      "FIELD": "TEXT"
+    }
+  }
+}
+such...
+
+GET /hotel/_search
+{
+  "query": {
+    "match": {
+      "name": "上海豪升"
+    }
+  }
+}
+
+```
+
+<img src="https://gitee.com/ingachin/mdimage/raw/master/image-20220411210449607.png" alt="image-20220411210449607"  />
+
+**参与查询的字段越多性能越差，推荐使用all字段  **
+
+###### 2.精确查询
+
+![image-20220411210941993](https://gitee.com/ingachin/mdimage/raw/master/image-20220411210941993.png)
+
+```DSL
+GET /hotel/_search
+{
+  "query": {
+    "term": {
+      "city": {
+        "value": "上海"
+      }
+    }
+  }
+}
+```
+
+###### 4.地理查询
+
+![image-20220411212126303](https://gitee.com/ingachin/mdimage/raw/master/image-20220411212126303.png)
+
+<img src="https://gitee.com/ingachin/mdimage/raw/master/image-20220411212431268.png" alt="image-20220411212431268"  />
+
+<img src="https://gitee.com/ingachin/mdimage/raw/master/image-20220413160403295.png" alt="image-20220413160403295"  />
+
+###### 5.function score Query
+
+```DSL
+
+GET /hotel/_search
+{
+  "query": {
+    "function_score": {
+      "query": {"match": {
+        "all": "外滩"
+      }},
+      "functions": [
+        {
+          "filter": {"term": {"brand": "7天酒店"}},
+          "weight": 10
+        }
+      ]
+    }
+  }
+}
+```
+
+###### 6.Boolean Query
+
+![image-20220413155537881](https://gitee.com/ingachin/mdimage/raw/master/image-20220413155537881.png)
+
+```DSL
+GET /hotel/_search
+{
+  "query": {
+    "bool": {
+      "must": [
+        {"term": {"city": "上海"}}
+      ],
+      "should": [
+        {"term": 
+          {
+            "brand": "君悦"
+          }
+        }
+      ]
+    }
+  }
+}
+```
+
+##### 7.搜索结果排序  
+
+sort后将会放弃相关性算分
+
+![image-20220413160203370](https://gitee.com/ingachin/mdimage/raw/master/image-20220413160203370.png)
+
+![image-20220413160223575](https://gitee.com/ingachin/mdimage/raw/master/image-20220413160223575.png)
+
+![image-20220413160335412](https://gitee.com/ingachin/mdimage/raw/master/image-20220413160335412.png)
+
+##### 8.搜索结果分页
+
+![image-20220413161742048](https://gitee.com/ingachin/mdimage/raw/master/image-20220413161742048.png)
+
+###### 深度分页问题
+
+![image-20220413161802685](https://gitee.com/ingachin/mdimage/raw/master/image-20220413161802685.png)
+
+![image-20220413161820672](https://gitee.com/ingachin/mdimage/raw/master/image-20220413161820672.png)
+
+##### 9.搜索结果高亮处理
+
+![image-20220413162128912](https://gitee.com/ingachin/mdimage/raw/master/image-20220413162128912.png)
+
+### 10.RestClient实现文档Query常见操作  
+
+##### 1.快速入门
+
+ ![image-20220413163604563](https://gitee.com/ingachin/mdimage/raw/master/image-20220413163604563.png)
+
+```java
+@Test
+void test1() throws IOException {
+    SearchRequest searchRequest = new SearchRequest("hotel");
+
+    searchRequest.source().query(QueryBuilders.matchAllQuery());
+
+    SearchResponse response = client.search(searchRequest,RequestOptions.DEFAULT);
+
+    SearchHits hits = response.getHits();
+
+    long value = hits.getTotalHits().value;
+
+    SearchHit[] hits1 = hits.getHits();
+
+    System.out.println(value);
+
+    for (SearchHit documentFields : hits1) {
+        String source = documentFields.getSourceAsString();
+        System.out.println(source);
+    }
+}
+```
+
+##### 2.精确查询
+
+![image-20220413193344271](https://gitee.com/ingachin/mdimage/raw/master/image-20220413193344271.png)
+
+##### 3.Boolean查询
+![image-20220413193736637](https://gitee.com/ingachin/mdimage/raw/master/image-20220413193736637.png)
+
+```java
+
+SearchRequest searchRequest = new SearchRequest("hotel");
+
+BoolQueryBuilder boolQuery = QueryBuilders.boolQuery();
+
+boolQuery.must(QueryBuilders.termQuery("brand","如家"));
+
+searchRequest.source().query(boolQuery);
+
+SearchResponse response = client.search(searchRequest, RequestOptions.DEFAULT);
+```
+
+
+
+##### 4.查询结果高亮
+
+![image-20220413195015520](https://gitee.com/ingachin/mdimage/raw/master/image-20220413195015520.png)
+
+```java
+    @Test
+    void test1() throws Exception {
+        SearchRequest searchRequest = new SearchRequest("hotel");
+        
+        searchRequest.source().query(QueryBuilders.matchQuery("all","上海"));
+        
+        searchRequest.source().highlighter(new HighlightBuilder().field("name").requireFieldMatch(false));
+        
+        SearchResponse response = client.search(searchRequest, RequestOptions.DEFAULT);
+        
+        for (SearchHit hit : response.getHits().getHits()) {
+            Map<String, HighlightField> highlightFields = hit.getHighlightFields();
+            
+            String name = highlightFields.get("name").getFragments()[0].string();
+            
+            String sourceAsString = hit.getSourceAsString();
+            
+            HotelDoc hotelDoc = JSON.parseObject(sourceAsString, HotelDoc.class);
+            
+            Class<?> aClass = hotelDoc.getClass();
+            
+            Field name1 = aClass.getDeclaredField("name");
+            
+            name1.setAccessible(true);
+            
+            name1.set(hotelDoc,name);
+            
+            System.out.println(hotelDoc);
+        }
+    }
+```
+
+### 11.案例实现  
+
+##### 1.BoolQuery
+
+```java
+
+@Service
+public class HotelService extends ServiceImpl<HotelMapper, Hotel> implements IHotelService {
+
+    @Autowired
+    RestHighLevelClient client;
+
+    @Override
+    public PageResult search(RequestParam param) {
+
+
+        SearchRequest request = new SearchRequest("hotel");
+
+        PageResult pageResult = new PageResult();
+
+        BoolQueryBuilder boolQuery = new BoolQueryBuilder();
+
+        request.source().query(boolQuery);
+
+        if(Strings.isEmpty(param.getKey())){
+            boolQuery.must(QueryBuilders.matchAllQuery());
+        }else{
+            boolQuery.must(QueryBuilders.matchQuery("all",param.getKey()));
+        }
+
+        if(!Strings.isEmpty(param.getCity())){
+            boolQuery.filter(QueryBuilders.termQuery("city",param.getCity()));
+        }
+
+        if(!Strings.isEmpty(param.getBrand())){
+            boolQuery.filter(QueryBuilders.termQuery("brand",param.getBrand()));
+        }
+
+        if(!Strings.isEmpty(param.getStarName())){
+            boolQuery.filter(QueryBuilders.termQuery("starName",param.getStarName()));
+        }
+
+        if(!Objects.isNull(param.getMaxPrice()) && !Objects.isNull(param.getMinPrice())){
+            boolQuery.filter(QueryBuilders.rangeQuery("price").gte(param.getMinPrice()).lte(param.getMaxPrice()));
+        }
+
+        if(!Strings.isEmpty(param.getSortBy())){
+            request.source().sort(SortBuilders.fieldSort(param.getSortBy()).order(SortOrder.DESC));
+        }
+
+        if(!Strings.isEmpty(param.getLocation())){
+            request.source().sort(SortBuilders.geoDistanceSort("location",new GeoPoint(param.getLocation()))
+                    .order(SortOrder.ASC)
+                    .unit(DistanceUnit.KILOMETERS));
+        }
+
+
+        request.source().from((param.getPage() - 1) * param.getSize()).size(param.getSize());
+
+        try {
+            SearchResponse search = client.search(request, RequestOptions.DEFAULT);
+
+            SearchHits hits = search.getHits();
+
+            long value = hits.getTotalHits().value;
+
+            pageResult.setTotal(value);
+
+            SearchHit[] hits1 = hits.getHits();
+
+            List<HotelDoc> list = new ArrayList<>();
+
+            for (SearchHit documentFields : hits1) {
+
+                list.add(JSON.parseObject(documentFields.getSourceAsString(),HotelDoc.class));
+
+            }
+
+            pageResult.setHotels(list);
+
+        } catch (IOException e) {
+
+            e.printStackTrace();
+
+        }
+        return pageResult;
+    }
+}
+
+```
+
+##### 2.Function score  
+
+![image-20220414104039795](https://gitee.com/ingachin/mdimage/raw/master/image-20220414104039795.png)
+
+```java
+        FunctionScoreQueryBuilder functionScoreQueryBuilder = QueryBuilders.functionScoreQuery(
+                QueryBuilders.matchQuery("all",param.getKey()),
+                new FunctionScoreQueryBuilder.FilterFunctionBuilder[]{
+                        new FunctionScoreQueryBuilder.FilterFunctionBuilder(
+                                QueryBuilders.termQuery("isAD",true),
+                                ScoreFunctionBuilders.weightFactorFunction(5)
+                        )
+                }
+        );
+
+        request.source().query(functionScoreQueryBuilder);
+```
+
+### 12.数据聚合  
+
+![image-20220418164938382](https://gitee.com/ingachin/mdimage/raw/master/image-20220418164938382.png)
+
+![image-20220418165428006](https://gitee.com/ingachin/mdimage/raw/master/image-20220418165428006.png)  
+
+```json
+{
+  "took" : 4,
+  "timed_out" : false,
+  "_shards" : {
+    "total" : 1,
+    "successful" : 1,
+    "skipped" : 0,
+    "failed" : 0
+  },
+  "hits" : {
+    "total" : {
+      "value" : 201,
+      "relation" : "eq"
+    },
+    "max_score" : null,
+    "hits" : [ ]
+  },
+  "aggregations" : {
+    "brandAgg" : {
+      "doc_count_error_upper_bound" : 0,
+      "sum_other_doc_count" : 39,
+      "buckets" : [
+        {
+          "key" : "7天酒店",
+          "doc_count" : 30
+        },
+        {
+          "key" : "如家",
+          "doc_count" : 30
+        },
+        {
+          "key" : "皇冠假日",
+          "doc_count" : 17
+        },
+        {
+          "key" : "速8",
+          "doc_count" : 15
+        },
+        {
+          "key" : "万怡",
+          "doc_count" : 13
+        },
+        {
+          "key" : "华美达",
+          "doc_count" : 13
+        },
+        {
+          "key" : "和颐",
+          "doc_count" : 12
+        },
+        {
+          "key" : "万豪",
+          "doc_count" : 11
+        },
+        {
+          "key" : "喜来登",
+          "doc_count" : 11
+        },
+        {
+          "key" : "希尔顿",
+          "doc_count" : 10
+        }
+      ]
+    }
+  }
+}
+ 
+```
+
+限定聚合范围
+
+```json
+GET /hotel/_search
+{
+  "query": {
+    "range": {
+      "price": {
+        "lte": 200
+      }
+    }
+  }, 
+  
+  "size": 0,
+  "aggs": {
+    "brandAgg": {
+      "terms": {
+        "field": "brand",
+        "size": 10
+        , "order": {
+          "_count": "asc"
+        }
+      }
+    }
+  }
+```
+
+Metrics聚合
+
+![image-20220418191023075](https://gitee.com/ingachin/mdimage/raw/master/image-20220418191023075.png)
+
+> Restclient实现
+
+![image-20220418191412777](https://gitee.com/ingachin/mdimage/raw/master/image-20220418191412777.png)
+
+
+
+![image-20220418191648234](https://gitee.com/ingachin/mdimage/raw/master/image-20220418191648234.png)
+
+```java
+    @Test
+    void test() throws IOException {
+        SearchRequest request = new SearchRequest("hotel");
+        request.source().size(0);
+
+        request.source().aggregation(AggregationBuilders
+                .terms("brandAgg")
+                .field("brand")
+                .size(20));
+
+        SearchResponse response = client.search(request, RequestOptions.DEFAULT);
+        Aggregations aggregations = response.getAggregations();
+        Terms terms = aggregations.get("brandAgg");
+        List<? extends Terms.Bucket> buckets = terms.getBuckets();
+        for (Terms.Bucket bucket : buckets) {
+            System.out.println(bucket.getKeyAsString() + bucket.getDocCount());
+        }
+    }
+```
+
+### 13.自动补全    
+
+#### 1.拼音分词器  
+
+[拼音分词器GitHub下载](https://github.com/medcl/elasticsearch-analysis-pinyin)
+
+```java
+POST /_analyze
+{
+  "text":["京东物流"],
+  "analyzer": "pinyin"
+}
+```
+
+####   2.自定义拼音分词器  
+
+  ![image-20220418201644581](https://gitee.com/ingachin/mdimage/raw/master/image-20220418201644581.png)  
+![image-20220418201819469](https://gitee.com/ingachin/mdimage/raw/master/image-20220418201819469.png)    
+
+#### 3.解决中文搜索时使拼音分词器  
+
+> 应该在创建索引库时使用自定义分词器
+>
+> 而在搜索时使用ik_smart分词器
+
+![image-20220418202135571](https://gitee.com/ingachin/mdimage/raw/master/image-20220418202135571.png)
+
+![image-20220418202220218](https://gitee.com/ingachin/mdimage/raw/master/image-20220418202220218.png)  
+
+ elasticsearch提供了Completion Suggester查询来实现自动补全功能。这个查询会匹配以用户输入内容开头的词条并返回。为了提高补全查询的效率，对于文档中字段的类型有一些约束：
+· 参与补全查询的字段必须是completion类型。 
+
+· 字段内容一般是用来补全的多个词条形成的数组
+
+<img src="https://gitee.com/ingachin/mdimage/raw/master/image-20220418202954140.png" alt="image-20220418202954140"/>
+
+### 14.数据同步  
+
+#### 1.同步调用
+
+![image-20220418203354312](https://gitee.com/ingachin/mdimage/raw/master/image-20220418203354312.png)
+
+#### 2.异步通知
+
+![image-20220418204152086](https://gitee.com/ingachin/mdimage/raw/master/image-20220418204152086.png)
+
+#### 3.监听binlog
+
+![image-20220418204222604](https://gitee.com/ingachin/mdimage/raw/master/image-20220418204222604.png)

@@ -15,3 +15,7 @@
 
 
 ![image-20220324220636528](https://gitee.com/ingachin/mdimage/raw/master/image-20220324220636528.png)
+
+## Mysql主从复制
+
+![image-20220418210413252](https://gitee.com/ingachin/mdimage/raw/master/image-20220418210413252.png)
