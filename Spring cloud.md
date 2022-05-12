@@ -2105,6 +2105,8 @@ POST /_analyze
 
 <img src="https://gitee.com/ingachin/mdimage/raw/master/image-20220418202954140.png" alt="image-20220418202954140"/>
 
+### ![image-20220428102508730](https://gitee.com/ingachin/mdimage/raw/master/image-20220428102508730.png)  
+
 ### 14.数据同步  
 
 #### 1.同步调用
